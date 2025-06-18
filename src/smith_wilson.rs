@@ -2,7 +2,19 @@
 //! which is used for yield curve construction and extrapolation
 //! beyond the last liquid point as specified in the EIOPA guidelines.
 
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{zero, DMatrix, DVector};
+use std::{error::Error, fmt};
+
+#[derive(Debug)]
+pub struct MatrixInversionError;
+
+impl Error for MatrixInversionError {}
+
+impl fmt::Display for MatrixInversionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matrix is not invertible")
+    }
+}
 
 /// Implements the Smith-Wilson method with intensities
 ///
@@ -53,7 +65,7 @@ impl SmithWilson {
         }
     }
 
-    pub fn fit(&self) {
+    pub fn fit(&self) -> Result<DVector<f64>, MatrixInversionError> {
         let ln_ufr = (1.0 + self.ufr).ln();
 
         let q_mat = q_matrix(
@@ -89,7 +101,7 @@ impl SmithWilson {
             t2,
             tau,
             precision,
-        );
+        )?;
 
         let tenors: u8 = 150;
 
@@ -159,6 +171,7 @@ impl SmithWilson {
         // for i in 0..tenors {
         //     println!("{}", zero_ac[i as usize]);
         // }
+        Ok(zero_ac)
     }
 }
 
@@ -171,10 +184,7 @@ struct SmithWilsonResult {
     pub zero_coupon_rate: Vec<f64>,
     pub yield_intensity: Vec<f64>,
     pub forward_intensity: Vec<f64>,
-
 }
-
-
 
 /// Calculates the Q matrix
 ///
@@ -264,7 +274,7 @@ fn g_alpha(
     num_of_coupon: u8,
     t2: f64,
     tau: f64,
-) -> (f64, DVector<f64>) {
+) -> Result<(f64, DVector<f64>), MatrixInversionError> {
     let mut h: DMatrix<f64> =
         DMatrix::zeros((umax * num_of_coupon).into(), (umax * num_of_coupon).into());
 
@@ -278,14 +288,12 @@ fn g_alpha(
             )
         }
     }
-    
-    let temp1 = DVector::from_element(num_of_rates.into(), 1.0) - q_mat.column_sum();
-    let temp_mat = ((q_mat * h) * q_mat.transpose()).try_inverse();
-    if temp_mat.is_none() {
-        // return Err("Matrix is not invertible");
-        panic!("Matrix is not invertible");
 
-    }
+    let temp1 = DVector::from_element(num_of_rates.into(), 1.0) - q_mat.column_sum();
+    let temp_mat = ((q_mat * h) * q_mat.transpose()).try_inverse().ok_or(MatrixInversionError);
+    // if temp_mat.is_none() {
+    //     return Err(MatrixInversionError);
+    // }
     let b = temp_mat.unwrap() * temp1;
     let q_b: DVector<f64> = q_mat.transpose() * b;
 
@@ -298,7 +306,8 @@ fn g_alpha(
 
     let kappa = (1.0 + alpha * temp2) / temp3;
     let g_a = alpha / (1.0 - kappa * (t2 * alpha).exp()).abs() - tau;
-    (g_a, q_b)
+
+    Ok((g_a, q_b))
 }
 
 fn scan_for_alpha(
@@ -310,22 +319,21 @@ fn scan_for_alpha(
     num_of_coupon: u8,
     t2: f64,
     tau: f64,
-    digit: u8
-) -> (f64, DVector<f64>) {
+    digit: u8,
+) -> Result<(f64, DVector<f64>), MatrixInversionError> {
     let mut alpha = prev_alpha - stepsize + stepsize / 10.0;
     let mut g_alpha_out: (f64, DVector<f64>) = (0.0, DVector::zeros(1));
+
     while alpha <= prev_alpha + stepsize / 10.0 {
-        // alpha = round_to_decimal(alpha, stepsize * 1000.0);
-        // let factor = 100.0 * 10f64.powi(digit as i32); Rounding 
-        // println!("Alpha D {:.12} Times {:.4}", trunc_to_decimal(alpha, i32::from(digit + 2)), factor);
-        g_alpha_out = g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau);
-        println!("Alpha Scan: {}, error: {}", alpha, g_alpha_out.0);
+        g_alpha_out = g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau)?;
+        
         if g_alpha_out.0 <= 0.0 {
             break;
         }
+        // println!("Alpha Scan: {}, error: {}", alpha, g_alpha_out.0);
         alpha += stepsize / 10.0;
     }
-    (alpha, g_alpha_out.1)
+    Ok((alpha, g_alpha_out.1))
 }
 
 fn optimize_alpha(
@@ -337,7 +345,7 @@ fn optimize_alpha(
     t2: f64,
     tau: f64,
     precision: u8,
-) -> (f64, DVector<f64>) {
+) -> Result<(f64, DVector<f64>), MatrixInversionError> {
     let g_alpha_out = g_alpha(
         alpha_min,
         &q_mat,
@@ -346,7 +354,7 @@ fn optimize_alpha(
         num_of_coupon,
         t2,
         tau,
-    );
+    )?;
     let mut alpha: f64;
     let mut gamma = DVector::zeros((umax * num_of_coupon) as usize);
 
@@ -359,13 +367,14 @@ fn optimize_alpha(
 
         while alpha < 20.0 {
             println!("Alpha 1: {}", alpha); // DEBUG
-            if g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau).0 <= 0.0 {
+            if g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau)?.0 <= 0.0 {
                 break;
             }
             alpha += stepsize;
         }
 
         for digit in 0..precision {
+            // let (alpha_out, gamma_out) = scan_for_alpha(
             let (alpha_out, gamma_out) = scan_for_alpha(
                 alpha,
                 stepsize,
@@ -375,8 +384,9 @@ fn optimize_alpha(
                 num_of_coupon,
                 t2,
                 tau,
-                digit
-            );
+                digit,
+            )?;
+            
             alpha = alpha_out;
             gamma = gamma_out;
             stepsize /= 10.0;
@@ -384,7 +394,7 @@ fn optimize_alpha(
     }
     println!("Alpha Ende: {}", alpha); // DEBUG
 
-    (alpha, gamma)
+    Ok((alpha, gamma))
 }
 
 fn trunc_to_decimal(mut v: f64, digits: i32) -> f64 {

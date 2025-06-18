@@ -42,6 +42,6 @@ mod tests {
             40,
             20
         );
-        smith_wilson.fit();
+        let _result = smith_wilson.fit();
     }
 }
