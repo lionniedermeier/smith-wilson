@@ -130,12 +130,6 @@ impl SmithWilson {
         let tt_intensity: DVector<f64>;
         tt_discount = h * gamma.clone();
         tt_intensity = g * gamma.clone();
-        // Debug
-        println!(""); // DEBUG
-        for i in 0..19 {
-            println!("Gamma {}", gamma[i as usize]);
-        }
-        println!(""); // DEBUG
 
         let mut temp: f64 = 0.0;
         for i in 0..u16::from(umax * self.num_of_coupon) {
@@ -296,9 +290,7 @@ fn g_alpha(
     let temp_mat = ((q_mat * h) * q_mat.transpose())
         .try_inverse()
         .ok_or(MatrixInversionError);
-    // if temp_mat.is_none() {
-    //     return Err(MatrixInversionError);
-    // }
+
     let b = temp_mat.unwrap() * temp1;
     let q_b: DVector<f64> = q_mat.transpose() * b;
 
@@ -323,8 +315,7 @@ fn scan_for_alpha(
     umax: u8,
     num_of_coupon: u8,
     t2: f64,
-    tau: f64,
-    digit: u8,
+    tau: f64
 ) -> Result<(f64, DVector<f64>), MatrixInversionError> {
     let mut alpha = prev_alpha - stepsize + stepsize / 10.0;
     let mut g_alpha_out: (f64, DVector<f64>) = (0.0, DVector::zeros(1));
@@ -335,7 +326,6 @@ fn scan_for_alpha(
         if g_alpha_out.0 <= 0.0 {
             break;
         }
-        // println!("Alpha Scan: {}, error: {}", alpha, g_alpha_out.0);
         alpha += stepsize / 10.0;
     }
     Ok((alpha, g_alpha_out.1))
@@ -371,14 +361,13 @@ fn optimize_alpha(
         alpha = alpha_min;
 
         while alpha < 20.0 {
-            println!("Alpha 1: {}", alpha); // DEBUG
             if g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau)?.0 <= 0.0 {
                 break;
             }
             alpha += stepsize;
         }
 
-        for digit in 0..precision {
+        for _digit in 0..precision {
             // let (alpha_out, gamma_out) = scan_for_alpha(
             let (alpha_out, gamma_out) = scan_for_alpha(
                 alpha,
@@ -389,7 +378,6 @@ fn optimize_alpha(
                 num_of_coupon,
                 t2,
                 tau,
-                digit,
             )?;
 
             alpha = alpha_out;
@@ -397,75 +385,6 @@ fn optimize_alpha(
             stepsize /= 10.0;
         }
     }
-    println!("Alpha Ende: {}", alpha); // DEBUG
 
     Ok((alpha, gamma))
-}
-
-fn trunc_to_decimal(mut v: f64, digits: i32) -> f64 {
-    v = (v * 10_f64.powi(digits)).trunc();
-    v = v / 10_f64.powi(digits);
-    v
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn get_u() -> Vec<u8> {
-        let u: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 19, 20];
-        u
-    }
-    fn get_r() -> Vec<f64> {
-        let r: Vec<f64> = vec![
-            0.9250, 1.0590, 1.1032, 1.1044, 1.3788, 1.6944, 1.8429, 1.8642, 2.0102, 2.1872, 2.2981,
-            2.4615, 2.5868, 2.6940, 2.7786, 2.7962, 2.8432, 2.8665, 2.8957, 2.9492,
-        ]
-        .iter()
-        .map(|x| x / 100.0)
-        .collect();
-        r
-    }
-
-    // #[test]
-    // fn test_get_liquid_rates() {
-    //     let u = get_u();
-    //     let r = get_r();
-    //     let liq_r: Vec<f64> = get_liquid_rates(&u, &r);
-    //     println!("{:?}", liq_r);
-    // }
-
-    // #[test]
-    // fn test_qmat() {
-    //     let u = get_u();
-    //     let r = get_r();
-    //     let rl = get_liquid_rates(&u, &r);
-    //     let ufr = (1.0 + f64::from(3.3 / 100.0)).ln();
-    //     let instrument = Instrument::SWAP;
-    //     let q_mat = q_matrix(&u, &rl, ufr, &instrument, 1);
-    //     // Print matrix
-    //     for row in q_mat.row_iter() {
-    //         let row_out = row
-    //             .iter()
-    //             .map(|v| format!("{:.5}", v))
-    //             .collect::<Vec<_>>()
-    //             .join(" ");
-    //         println!("{}", row_out);
-    //     }
-    // }
-
-    // #[test]
-    // fn test_g_alpha() {
-    //     let u = get_u();
-    //     let r = get_r();
-    //     let rl = get_liquid_rates(&u, &r);
-    //     let ufr = (1.0 + f64::from(3.3)).ln();
-    //     let instrument = Instrument::SWAP;
-    //     let q_mat = q_matrix(&u, &rl, ufr, &instrument, 1);
-    //     let umax = u[(u.len() - 1) as usize];
-    //     println!("{}", rl.len());
-    //     let num_of_rates = rl.len().try_into().unwrap();
-    //     let aout = g_alpha(0.05, &q_mat, num_of_rates, umax, 1, 60.0, 1.0 / 10000.0);
-    //     println!("{:?}", aout.1)
-    // }
 }
