@@ -174,6 +174,7 @@ impl SmithWilson {
 pub enum Instrument {
     Zero,
     Swap,
+    Bond
 }
 
 /// The result of the smith-wilson extrapolation
@@ -214,7 +215,7 @@ pub fn q_matrix(
                 q_mat[(i, ui)] = (-ufr * uf).exp() * ((1.0 + r[i]).powf(uf));
             }
         }
-        _ => {
+        Instrument::Swap | Instrument::Bond => {
             q_mat = DMatrix::zeros(num_of_rates.into(), (umax * num_of_coupon).into());
 
             for i in 0..num_of_rates {
