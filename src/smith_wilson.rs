@@ -29,8 +29,6 @@ impl fmt::Display for MatrixInversionError {
 /// - `convergence_period`: year to convergence point from last-liquid-point.
 /// - `llp`: Last-liquid-point.
 pub struct SmithWilson {
-    pub maturities: Vec<u8>,
-    pub rates: Vec<f64>,
     pub ufr: f64,
     pub instrument: Instrument,
     pub alpha_min: f64,
@@ -42,8 +40,6 @@ pub struct SmithWilson {
 
 impl SmithWilson {
     pub fn new(
-        maturities: Vec<u8>,
-        rates: Vec<f64>,
         instrument: Instrument,
         ufr: f64,
         alpha_min: f64,
@@ -53,8 +49,6 @@ impl SmithWilson {
         llp: u8,
     ) -> Self {
         Self {
-            maturities,
-            rates,
             instrument,
             ufr,
             alpha_min,
@@ -65,12 +59,12 @@ impl SmithWilson {
         }
     }
 
-    pub fn fit(&self) -> Result<DVector<f64>, MatrixInversionError> {
+    pub fn fit(&self, maturities: &Vec<u8>, rates: &Vec<f64>) -> Result<DVector<f64>, MatrixInversionError> {
         let ln_ufr = (1.0 + self.ufr).ln();
 
         let q_mat = q_matrix(
-            &self.maturities,
-            &self.rates,
+            &maturities,
+            &rates,
             ln_ufr,
             &self.instrument,
             self.num_of_coupon,
@@ -78,8 +72,8 @@ impl SmithWilson {
 
         let precision = 6;
         let t2 = (self.llp + self.convergence_period).max(60) as f64;
-        let num_of_rates = self.rates.len() as u16;
-        let umax = *self.maturities.last().unwrap();
+        let num_of_rates = rates.len() as u16;
+        let umax = *maturities.last().unwrap();
         let tau = self.tau / 10000.0;
 
         // let (error, _gamma) = g_alpha(

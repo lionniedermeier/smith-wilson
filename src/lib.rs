@@ -32,8 +32,6 @@ mod tests {
         }
 
         let smith_wilson = SmithWilson::new(
-            u,
-            r_liq,
             instrument,
             ufr,
             0.05,
@@ -42,6 +40,6 @@ mod tests {
             40,
             20
         );
-        let _result = smith_wilson.fit();
+        let _result = smith_wilson.fit(&u, &r_liq);
     }
 }
