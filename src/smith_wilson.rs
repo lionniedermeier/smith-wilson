@@ -2,7 +2,7 @@
 //! which is used for yield curve construction and extrapolation
 //! beyond the last liquid point as specified in the EIOPA guidelines.
 
-use nalgebra::{zero, DMatrix, DVector};
+use nalgebra::{DMatrix, DVector};
 use std::{error::Error, fmt};
 
 #[derive(Debug)]
