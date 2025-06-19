@@ -172,8 +172,8 @@ impl SmithWilson {
 }
 
 pub enum Instrument {
-    ZERO,
-    SWAP,
+    Zero,
+    Swap,
 }
 
 /// The result of the smith-wilson extrapolation
@@ -204,7 +204,7 @@ pub fn q_matrix(
     let umax = u[u.len() - 1];
 
     match instrument {
-        Instrument::ZERO => {
+        Instrument::Zero => {
             q_mat = DMatrix::zeros(num_of_rates.into(), (umax * num_of_coupon).into());
 
             for i in 0..num_of_rates {
@@ -414,7 +414,7 @@ mod tests {
         let u = get_u();
         let r = get_r();
         let mut r_liq = get_liquid_rates(&u, &r);
-        let instrument = Instrument::SWAP;
+        let instrument = Instrument::Swap;
         let cra = 10;
 
         for i in 0..r_liq.len() {
