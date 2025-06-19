@@ -1,5 +1,5 @@
 mod utils;
-mod smith_wilson;
+pub mod smith_wilson;
 
 #[cfg(test)]
 mod tests {
