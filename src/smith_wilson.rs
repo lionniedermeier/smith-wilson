@@ -59,7 +59,11 @@ impl SmithWilson {
         }
     }
 
-    pub fn fit(&self, maturities: &Vec<u8>, rates: &Vec<f64>) -> Result<DVector<f64>, MatrixInversionError> {
+    pub fn fit(
+        &self,
+        maturities: &Vec<u8>,
+        rates: &Vec<f64>,
+    ) -> Result<SmithWilsonResult, MatrixInversionError> {
         let ln_ufr = (1.0 + self.ufr).ln();
 
         let q_mat = q_matrix(
@@ -140,13 +144,13 @@ impl SmithWilson {
                     * gamma[(i as usize, 0)];
         }
 
-        let mut discount: DVector<f64> = DVector::zeros(150);
-        let mut fw_intensity: DVector<f64> = DVector::zeros(150);
-        let mut yld_intensity: DVector<f64> = DVector::zeros(150);
-        let mut forward_ac: DVector<f64> = DVector::zeros(150);
-        let mut zero_ac: DVector<f64> = DVector::zeros(150);
-        // let mut forward_cc: DVector<f64> = DVector::zeros(150);
-        // let mut zero_cc: DVector<f64> = DVector::zeros(150);
+        let mut discount: Vec<f64> = vec![0.0; 150];
+        let mut fw_intensity: Vec<f64> = vec![0.0; 150];
+        let mut yld_intensity: Vec<f64> = vec![0.0; 150];
+        let mut forward_ac: Vec<f64> = vec![0.0; 150];
+        let mut zero_ac: Vec<f64> = vec![0.0; 150];
+        // let mut forward_cc: Vec<f64> = vec![0.0; 150];
+        // let mut zero_cc: Vec<f64> = vec![0.0; 150];
 
         yld_intensity[0] = ln_ufr - alpha * temp;
         fw_intensity[0] = yld_intensity[0];
@@ -161,11 +165,14 @@ impl SmithWilson {
             forward_ac[i as usize] = discount[(i - 1) as usize] / discount[i as usize] - 1.0;
         }
 
-        // DEBUG
-        // for i in 0..tenors {
-        //     println!("{}", zero_ac[i as usize]);
-        // }
-        Ok(zero_ac)
+        let res = SmithWilsonResult {
+            zero_coupon_rate: zero_ac,
+            yield_intensity: yld_intensity,
+            forward_intensity: fw_intensity,
+            alpha: alpha,
+        };
+
+        Ok(res)
     }
 }
 
@@ -174,10 +181,12 @@ pub enum Instrument {
     SWAP,
 }
 
-struct SmithWilsonResult {
+/// The result of the smith-wilson extrapolation
+pub struct SmithWilsonResult {
     pub zero_coupon_rate: Vec<f64>,
     pub yield_intensity: Vec<f64>,
     pub forward_intensity: Vec<f64>,
+    pub alpha: f64,
 }
 
 /// Calculates the Q matrix
@@ -284,7 +293,9 @@ fn g_alpha(
     }
 
     let temp1 = DVector::from_element(num_of_rates.into(), 1.0) - q_mat.column_sum();
-    let temp_mat = ((q_mat * h) * q_mat.transpose()).try_inverse().ok_or(MatrixInversionError);
+    let temp_mat = ((q_mat * h) * q_mat.transpose())
+        .try_inverse()
+        .ok_or(MatrixInversionError);
     // if temp_mat.is_none() {
     //     return Err(MatrixInversionError);
     // }
@@ -320,7 +331,7 @@ fn scan_for_alpha(
 
     while alpha <= prev_alpha + stepsize / 10.0 {
         g_alpha_out = g_alpha(alpha, &q_mat, num_of_rates, umax, num_of_coupon, t2, tau)?;
-        
+
         if g_alpha_out.0 <= 0.0 {
             break;
         }
@@ -380,7 +391,7 @@ fn optimize_alpha(
                 tau,
                 digit,
             )?;
-            
+
             alpha = alpha_out;
             gamma = gamma_out;
             stepsize /= 10.0;
